@@ -15,24 +15,6 @@ install.packages("leaflet.extras")
 install.packages("igraph")
 install.packages("stplanr")
 
-# We'll use remotes to install packages, install it if needs be:
-if(!"remotes" %in% installed.packages()) {
-  install.packages("remotes")
-}
-
-cran_pkgs = c(
-  "dplyr",
-  "tibble",
-  "ggplot2",
-  "units",
-  "rgrass7",
-  "link2GI",
-  "nabor"
-)
-
-remotes::install_cran(cran_pkgs)
-
-
 #### LOAD LIBRARIEs ####
 
 library(rgdal)
@@ -50,7 +32,6 @@ library(leaflet)
 library(leaflet.extras)
 library(maptools)
 library(rgeos)
-library(rgdal)
 library(osmdata)
 library(ggmap)
 library(ggplot2)
@@ -61,18 +42,13 @@ library(gdalUtils)
 library(plotly)
 library(spatstat)
 library(tibble)
-library(ggplot2)
-library(units)
-library(rgrass7)
-library(link2GI)
-library(nabor)
 
 getwd() #GET WORKING DIRECTORY
 #setwd("/Users/ivann/Desktop/") #TO SET WORKING DIRECTORY
 
-link = findGRASS()
 
-#### highway ####
+
+#### highway key ####
 # points
 summarize(phigh$osm_points)
 qtm(phigh$osm_points)
@@ -81,6 +57,7 @@ qtm(phigh$osm_points)
 summarise(phigh$osm_lines)
 qtm(phigh$osm_lines)
 
+# keep the edges that are walkable
 VeniceRoads_Lines <- phigh$osm_lines[-which(phigh$osm_lines$highway %in% c("service","trunk")),]
 
 # polygons
@@ -101,109 +78,8 @@ unique(VeniceRoads_Lines$highway)
 
 qtm(VeniceRoads_Lines)
 
-#### buildings ####
-i <- 1
-for (i in c(1:153)){
-unique(pbuild$osm_polygons[,i])  
-}
-
-qtm(pbuild$osm_polygons)
-
-
 #### PROJECTION OF THE MAP  ####
 crs <-  "+proj=longlat +datum=WGS84 +no_defs"
-#### Other method with edges and nodes ####
-
-# taken from: https://www.r-spatial.org/r/2019/09/26/spatial-networks.html
-
-
-VeniceRoads_Lines <- VeniceRoads_Lines[,c("name","highway","geometry")]
-
-edges <- VeniceRoads_Lines %>%
-  mutate(edgeID = c(1:n()))
-
-edges
-
-nodes <- edges %>%
-  st_coordinates() %>%
-  as_tibble() %>%
-  rename(edgeID = L1) %>%
-  group_by(edgeID) %>%
-  slice(c(1, n())) %>%
-  ungroup() %>%
-  mutate(start_end = rep(c('start', 'end'), times = n()/2))
-
-nodes
-
-nodes <- nodes %>%
-  mutate(xy = paste(.$X, .$Y)) %>% 
-  mutate(nodeID = group_indices(., factor(xy, levels = unique(xy)))) %>%
-  select(-xy)
-
-nodes
-
-source_nodes <- nodes %>%
-  filter(start_end == 'start') %>%
-  pull(nodeID)
-
-target_nodes <- nodes %>%
-  filter(start_end == 'end') %>%
-  pull(nodeID)
-
-edges = edges %>%
-  mutate(from = source_nodes, to = target_nodes)
-
-edges
-
-nodes <- nodes %>%
-  distinct(nodeID, .keep_all = TRUE) %>%
-  select(-c(edgeID, start_end)) %>%
-  st_as_sf(coords = c('X', 'Y')) %>%
-  st_set_crs(st_crs(edges))
-
-nodes
-
-graph = tbl_graph(nodes = nodes, edges = as_tibble(edges), directed = FALSE)
-
-graph
-
-graph <- graph %>%
-  activate(nodes) %>%
-  mutate(degree = centrality_degree()) %>%
-  mutate(betweenness = centrality_betweenness(weights = length)) %>%
-  activate(edges) %>%
-  mutate(betweenness = centrality_edge_betweenness(weights = length))
-
-graph
-
-tmap_mode('view')
-
-tm_shape(graph %>% activate(edges) %>% as_tibble() %>% st_as_sf(), bbox = bbVenice) +
-  tm_lines(col = "betweenness",lwd = 2, palette = "plasma",contrast = c(0,.7)) +
-  tm_shape(graph %>% activate(nodes) %>% as_tibble() %>% st_as_sf()) +
-  tm_dots(col = "betweenness") +
-  tmap_options(basemaps = 'OpenStreetMap')
-
-graph <- graph %>%
-  activate(edges) %>%
-  mutate(length = st_length(geometry))
-
-graph
-
-graph <- graph %>%
-  activate(nodes) %>%
-  mutate(degree = centrality_degree()) %>%
-  mutate(betweenness = centrality_betweenness(weights = length)) %>%
-  activate(edges) %>%
-  mutate(betweenness = centrality_edge_betweenness(weights = length))
-
-graph
-
-ggplot() +
-  geom_sf(data = graph %>% activate(edges) %>% as_tibble() %>% st_as_sf(), aes(col = betweenness, size = betweenness)) +
-  scale_colour_viridis_c(option = 'inferno') +
-  scale_size_continuous(range = c(0,4))
-
 #### TRANSFORMING THE ROADS NETWORK FROM LINESTRING OBJECTS TO A SPATIAL LINES NETWORK ####
 
 # INSPIRED BY CHAPTER 12.8 https://geocompr.robinlovelace.net/transport.html#route-networks 
@@ -217,135 +93,79 @@ VeniceRoads@nb
 
 ##
 ######### Analysis #############
-#WITH THE NODS OF THE NETWORK TO CALCULATE THE CONNECTIVITY OF A ROAD
-#e <- NULL
+
+#Edge betweenness 
 e = edge_betweenness(VeniceRoads@g) %>% as.data.frame(.)
 summary(e)
 colnames(e)[1] <- "e"
 e$id <- c(1:length(e$e))
 colnames(e)
 
-b = betweenness(VeniceRoads@g,normalized = F,directed = F) %>% as.data.frame()
-summary(b)
-b$id <- c(1:length(b$.))
-colnames(b)[1] <- "b"
+# closeness 
 
-C <- closeness(VeniceRoads@g, normalized = T) %>% as.data.frame(.)
+C <- closeness(VeniceRoads@g,mode = "all", normalized = T) %>% as.data.frame(.) 
+# inversing the values for easier manipulation
+C <- round(1/C)
 summary(C)
 C$id <- c(1:length(C$.))
 colnames(C)[1] <- "c"
-C
 
-# component <- components(VeniceRoads@g)
-# 
-# veniceClusters <- data.frame(c(1:length(component$membership)),component$membership)
-# colnames(veniceClusters) <- c("id","membership")
+hist(C$c)
 
-# 
-# CEB <- cluster_edge_betweenness(VeniceRoads@g,weights = VeniceRoads@sl$length , directed = F)
+#### Merging with the Spatial lines ####
 
-####  ADAPTING CONNECTIVITY DATA  ####
+VeniceE <- merge(VeniceRoads@sl,e, by.x = "id", by.y = "id")
 
-# view(VeniceRoads@sl)
-# view(e)
-# 
-# hist(C$c)
-# range(C$c)
-# max()
-
-VeniceWalk <- merge(VeniceRoads@sl,e, by.x = "id", by.y = "id")
-
-VeniceWalk$b <- b
-
-VeniceWalk$c <- c
- 
-# VeniceB <- merge(VeniceRoads@sl,b, by.x = "id", by.y = "id")
-# 
-# VeniceC <- merge(VeniceRoads@sl,C,by.x = "id", by.y = "id")
-
-#VeniceClusters <- merge(VeniceRoads@sl,veniceClusters ,by.x = "id", by.y = "id")
+VeniceC <- merge(VeniceRoads@sl,C,by.x = "id", by.y = "id")
 
 #### maps #### 
 
 tmap_mode("view")
 
-hist(VeniceClusters$membership)
-
-# betweenness
-hist(VeniceB$b)
-
-tm_shape(VeniceB, bbox = bbVenice) +
-  tm_lines(col = "b"
-           ,style = "fixed"
-           ,palette = "plasma"
-           ,lwd=2
-           ,n=6
-           ,contrast = c(0, .7)
-           ,breaks =  c(0,1,250,500,20000,40000,80100) ## log or lin scale  log : c(0,1,7,11,13) ; lin : c(0,100,1000,10000,350000,60000)
-           ,alpha = 1
-           ,legend.col.show = T,
-           title.col = "Score :",
-           labels = c("low","","","","", "high")
-  ) + tm_layout(main.title = "Betweenness",
-                legend.outside = T,
-                legend.text.size = 1)
-
-# closeness
-
 hist(VeniceC$c)
 
-tm_shape(VeniceC, bbox = bbVenice) +
+mapC <- tm_shape(VeniceC, bbox = bbVenice) +
   tm_lines(col = "c",
            style = "fixed"
-           ,palette = "inferno"
+           ,palette = "-plasma"
            ,lwd=2
-           ,n=6
-           ,contrast = c(0, .7)
-           ,breaks =  c(0,1,50,500,20000,40000,80100) ## log or lin scale  log : c(0,1,7,11,13) ; lin : c(0,100,1000,10000,350000,60000)
+           ,n=4
+           #,contrast = c(.7,1)
+           ,breaks =  c(8700,8800,9200,9250,9300)
            ,alpha = 1
            ,legend.col.show = T,
-           title.col = "Score :",
-           labels = c("low","","","","", "high")
+           title.col = "Closeness Score :",
+           labels = c("high","","", "low")
   ) + tm_layout(main.title = "Closeness",
                 legend.outside = T,
-                legend.text.size = 1)
+                legend.text.size = 1) + tm_view(set.zoom.limits = c(13, 16),
+                                                set.bounds = bbVenice)
+
+mapC
 
 hist(VeniceE$e)
 
-tm_shape(VeniceE, bbox = bbVenice) +
+mapE <- tm_shape(VeniceE, bbox = bbVenice) +
   tm_lines(col = "e",
            style = "fixed"
            ,palette = "plasma"
            ,lwd=2
            ,n=6
            ,contrast = c(0, .7)
-           ,breaks =  c(0,1,250,500,20000,40000,80100) ## log or lin scale  log : c(0,1,7,11,13) ; lin : c(0,100,1000,10000,350000,60000)
+           ,breaks =  c(0,1,250,500,20000,40000,80100)
            ,alpha = 1
            ,legend.col.show = T,
-           title.col = "Score :",
+           title.col = "Edge Betweenness Score :",
            labels = c("low","","","","", "high")
-  ) + tm_layout(title = "Pedestrian density",
-                scale = 1.5,
+  ) + tm_layout(scale = 1.5,
                 legend.outside = T,
                 legend.text.size = 1,
-                ) 
-  tm_shape(VeniceC, bbox = bbVenice) +
-  tm_lines(col = "c",
-           style = "fixed"
-           ,palette = "plasma"
-           ,lwd=2
-           ,n=6
-           ,contrast = c(0, .7)
-           ,breaks =  c(0,1,50,500,20000,40000,80100) ## log or lin scale  log : c(0,1,7,11,13) ; lin : c(0,100,1000,10000,350000,60000)
-           ,alpha = 1
-           ,legend.col.show = T,
-           title.col = "Score :",
-           labels = c("low","","","","", "high")
-  ) + tm_layout(main.title = "Closeness",
-                legend.outside = T,
-                legend.text.size = 1) +
-  tmap_options(basemaps = "Esri.WorldGrayCanvas")
+                )
+mapE
 
+map <- mapE + mapC
+
+map
 #
 #### load data ####
 
@@ -361,14 +181,3 @@ phigh <- opq(bbox = bbVenice,timeout = 600) %>%
   ) %>%
   osmdata_sf() %>% osm_poly2line()
 view(phigh)
-
-
-# Not ised 
-pbuild <- opq(bbox = bbVenice,timeout = 600) %>% #timeout in seconds
-  add_osm_feature(key = "building"
-                  #,value = "appartments"
-                  ,key_exact = TRUE
-                  #,value_exact = FALSE
-                  #,match_case = FALSE
-  ) %>%
-  osmdata_sf()
