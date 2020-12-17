@@ -176,7 +176,7 @@ graph <- graph %>%
 
 graph
 
-tmap_mode('plot')
+tmap_mode('view')
 
 tm_shape(graph %>% activate(edges) %>% as_tibble() %>% st_as_sf(), bbox = bbVenice) +
   tm_lines(col = "betweenness",lwd = 2, palette = "plasma",contrast = c(0,.7)) +
@@ -272,6 +272,7 @@ tmap_mode("view")
 hist(VeniceClusters$membership)
 
 # betweenness
+hist(VeniceB$b)
 
 tm_shape(VeniceB, bbox = bbVenice) +
   tm_lines(col = "b"
@@ -288,6 +289,7 @@ tm_shape(VeniceB, bbox = bbVenice) +
   ) + tm_layout(main.title = "Betweenness",
                 legend.outside = T,
                 legend.text.size = 1)
+
 # closeness
 
 hist(VeniceC$c)
@@ -314,7 +316,7 @@ tm_shape(VeniceE, bbox = bbVenice) +
   tm_lines(col = "e",
            style = "fixed"
            ,palette = "plasma"
-           ,lwd=3
+           ,lwd=2
            ,n=6
            ,contrast = c(0, .7)
            ,breaks =  c(0,1,250,500,20000,40000,80100) ## log or lin scale  log : c(0,1,7,11,13) ; lin : c(0,100,1000,10000,350000,60000)
@@ -326,7 +328,22 @@ tm_shape(VeniceE, bbox = bbVenice) +
                 scale = 1.5,
                 legend.outside = T,
                 legend.text.size = 1,
-                ) +
+                ) 
+  tm_shape(VeniceC, bbox = bbVenice) +
+  tm_lines(col = "c",
+           style = "fixed"
+           ,palette = "plasma"
+           ,lwd=2
+           ,n=6
+           ,contrast = c(0, .7)
+           ,breaks =  c(0,1,50,500,20000,40000,80100) ## log or lin scale  log : c(0,1,7,11,13) ; lin : c(0,100,1000,10000,350000,60000)
+           ,alpha = 1
+           ,legend.col.show = T,
+           title.col = "Score :",
+           labels = c("low","","","","", "high")
+  ) + tm_layout(main.title = "Closeness",
+                legend.outside = T,
+                legend.text.size = 1) +
   tmap_options(basemaps = "Esri.WorldGrayCanvas")
 
 #
