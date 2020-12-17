@@ -216,7 +216,7 @@ class(VeniceRoads@nb)
 VeniceRoads@nb
 
 ##
-#########CALCULATING BETWEENNESS #############
+######### Analysis #############
 #WITH THE NODS OF THE NETWORK TO CALCULATE THE CONNECTIVITY OF A ROAD
 #e <- NULL
 e = edge_betweenness(VeniceRoads@g) %>% as.data.frame(.)
@@ -346,7 +346,7 @@ phigh <- opq(bbox = bbVenice,timeout = 600) %>%
 view(phigh)
 
 
-
+# Not ised 
 pbuild <- opq(bbox = bbVenice,timeout = 600) %>% #timeout in seconds
   add_osm_feature(key = "building"
                   #,value = "appartments"
